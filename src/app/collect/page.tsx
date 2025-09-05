@@ -1,23 +1,19 @@
 'use client'
+
 import { useState, useEffect } from 'react'
-import { Trash2, MapPin, CheckCircle, Clock, ArrowRight, Camera, Upload, Loader, Calendar, Weight, Search } from 'lucide-react'
+import { Trash2, MapPin, CheckCircle, Clock, Upload, Loader, Calendar, Weight, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'react-hot-toast'
-import { getWasteCollectionTasks, updateTaskStatus, saveReward, saveCollectedWaste, getUserByEmail } from '@/utils/db/actions'
-import { GoogleGenerativeAI } from "@google/generative-ai"
-
-// Make sure to set your Gemini API key in your environment variables
-const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY
 
 type CollectionTask = {
   id: number
   location: string
   wasteType: string
   amount: string
-  status: 'pending' | 'in_progress' | 'completed' | 'verified'
+  status: 'pending' | 'in_progress' | 'verified'
   date: string
-  collectorId: number | null
+  collectorId: string | null
 }
 
 const ITEMS_PER_PAGE = 5
@@ -25,74 +21,95 @@ const ITEMS_PER_PAGE = 5
 export default function CollectPage() {
   const [tasks, setTasks] = useState<CollectionTask[]>([])
   const [loading, setLoading] = useState(true)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [hoveredWasteType, setHoveredWasteType] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [user, setUser] = useState<{ id: number; email: string; name: string } | null>(null)
-
-  useEffect(() => {
-    const fetchUserAndTasks = async () => {
-      setLoading(true)
-      try {
-        // Fetch user
-        const userEmail = localStorage.getItem('userEmail')
-        if (userEmail) {
-          const fetchedUser = await getUserByEmail(userEmail)
-          if (fetchedUser) {
-            setUser(fetchedUser)
-          } else {
-            toast.error('User not found. Please log in again.')
-            // Redirect to login page or handle this case appropriately
-          }
-        } else {
-          toast.error('User not logged in. Please log in.')
-          // Redirect to login page or handle this case appropriately
-        }
-
-        // Fetch tasks
-        const fetchedTasks = await getWasteCollectionTasks()
-        setTasks(fetchedTasks as CollectionTask[])
-      } catch (error) {
-        console.error('Error fetching user and tasks:', error)
-        toast.error('Failed to load user data and tasks. Please try again.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchUserAndTasks()
-  }, [])
-
   const [selectedTask, setSelectedTask] = useState<CollectionTask | null>(null)
   const [verificationImage, setVerificationImage] = useState<string | null>(null)
-  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'success' | 'failure'>('idle')
-  const [verificationResult, setVerificationResult] = useState<{
-    wasteTypeMatch: boolean;
-    quantityMatch: boolean;
-    confidence: number;
-  } | null>(null)
-  const [reward, setReward] = useState<number | null>(null)
 
-  const handleStatusChange = async (taskId: number, newStatus: CollectionTask['status']) => {
-    if (!user) {
-      toast.error('Please log in to collect waste.')
+  useEffect(() => {
+    const storedEmail = localStorage.getItem('userEmail')
+    setUserEmail(storedEmail)
+
+    const existing = localStorage.getItem('collectionTasks')
+
+    if (!existing) {
+      const dummyTasks: CollectionTask[] = [
+        {
+          id: 1,
+          location: "Anna Nagar",
+          wasteType: "Plastic Bottles",
+          amount: "3kg",
+          status: "pending",
+          date: "2025-08-01",
+          collectorId: null,
+        },
+        {
+          id: 2,
+          location: "T. Nagar",
+          wasteType: "Food Waste",
+          amount: "5kg",
+          status: "in_progress",
+          date: "2025-08-02",
+          collectorId: storedEmail,
+        },
+        {
+          id: 3,
+          location: "Velachery",
+          wasteType: "E-Waste",
+          amount: "2kg",
+          status: "verified",
+          date: "2025-08-03",
+          collectorId: storedEmail,
+        },
+        {
+          id: 4,
+          location: "Tambaram",
+          wasteType: "Metal Scrap",
+          amount: "4kg",
+          status: "pending",
+          date: "2025-08-04",
+          collectorId: null,
+        },
+        {
+          id: 5,
+          location: "Kodambakkam",
+          wasteType: "Glass",
+          amount: "1kg",
+          status: "verified",
+          date: "2025-08-05",
+          collectorId: storedEmail,
+        }
+      ]
+
+      localStorage.setItem("collectionTasks", JSON.stringify(dummyTasks))
+      setTasks(dummyTasks)
+    } else {
+      setTasks(JSON.parse(existing))
+    }
+
+    setLoading(false)
+  }, [])
+
+  const saveTasks = (updated: CollectionTask[]) => {
+    setTasks(updated)
+    localStorage.setItem('collectionTasks', JSON.stringify(updated))
+  }
+
+  const handleStatusChange = (taskId: number, newStatus: CollectionTask['status']) => {
+    if (!userEmail) {
+      toast.error('User not logged in')
       return
     }
 
-    try {
-      const updatedTask = await updateTaskStatus(taskId, newStatus, user.id)
-      if (updatedTask) {
-        setTasks(tasks.map(task => 
-          task.id === taskId ? { ...task, status: newStatus, collectorId: user.id } : task
-        ))
-        toast.success('Task status updated successfully')
-      } else {
-        toast.error('Failed to update task status. Please try again.')
-      }
-    } catch (error) {
-      console.error('Error updating task status:', error)
-      toast.error('Failed to update task status. Please try again.')
-    }
+    const updated = tasks.map(task =>
+      task.id === taskId
+        ? { ...task, status: newStatus, collectorId: newStatus === 'in_progress' ? userEmail : task.collectorId }
+        : task
+    )
+    saveTasks(updated)
+    toast.success(`Task marked as ${newStatus}`)
   }
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,105 +123,34 @@ export default function CollectPage() {
     }
   }
 
-  const readFileAsBase64 = (dataUrl: string): string => {
-    return dataUrl.split(',')[1]
-  }
-
-  const handleVerify = async () => {
-    if (!selectedTask || !verificationImage || !user) {
-      toast.error('Missing required information for verification.')
+  const handleVerify = () => {
+    if (!selectedTask || !userEmail || !verificationImage) {
+      toast.error('Missing information for verification.')
       return
     }
 
-    setVerificationStatus('verifying')
-    
-    try {
-      const genAI = new GoogleGenerativeAI(geminiApiKey!)
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
-
-      const base64Data = readFileAsBase64(verificationImage)
-
-      const imageParts = [
-        {
-          inlineData: {
-            data: base64Data,
-            mimeType: 'image/jpeg', // Adjust this if you know the exact type
-          },
-        },
-      ]
-
-      const prompt = `You are an expert in waste management and recycling. Analyze this image and provide:
-        1. Confirm if the waste type matches: ${selectedTask.wasteType}
-        2. Estimate if the quantity matches: ${selectedTask.amount}
-        3. Your confidence level in this assessment (as a percentage)
-        
-        Respond in JSON format like this:
-        {
-          "wasteTypeMatch": true/false,
-          "quantityMatch": true/false,
-          "confidence": confidence level as a number between 0 and 1
-        }`
-
-      const result = await model.generateContent([prompt, ...imageParts])
-      const response = await result.response
-      const text = response.text()
-      
-      try {
-        const parsedResult = JSON.parse(text)
-        setVerificationResult({
-          wasteTypeMatch: parsedResult.wasteTypeMatch,
-          quantityMatch: parsedResult.quantityMatch,
-          confidence: parsedResult.confidence
-        })
-        setVerificationStatus('success')
-        
-        if (parsedResult.wasteTypeMatch && parsedResult.quantityMatch && parsedResult.confidence > 0.7) {
-          await handleStatusChange(selectedTask.id, 'verified')
-          const earnedReward = Math.floor(Math.random() * 50) + 10 // Random reward between 10 and 59
-          
-          // Save the reward
-          await saveReward(user.id, earnedReward)
-
-          // Save the collected waste
-          await saveCollectedWaste(selectedTask.id, user.id, parsedResult)
-
-          setReward(earnedReward)
-          toast.success(`Verification successful! You earned ${earnedReward} tokens!`, {
-            duration: 5000,
-            position: 'top-center',
-          })
-        } else {
-          toast.error('Verification failed. The collected waste does not match the reported waste.', {
-            duration: 5000,
-            position: 'top-center',
-          })
-        }
-      } catch (error) {
-        console.log(error);
-        
-        console.error('Failed to parse JSON response:', text)
-        setVerificationStatus('failure')
-      }
-    } catch (error) {
-      console.error('Error verifying waste:', error)
-      setVerificationStatus('failure')
-    }
+    const updated = tasks.map(task =>
+      task.id === selectedTask.id
+        ? { ...task, status: 'verified' }
+        : task
+    )
+    saveTasks(updated)
+    toast.success('Waste verified successfully! Reward added.')
+    setSelectedTask(null)
+    setVerificationImage(null)
   }
 
-  const filteredTasks = tasks.filter(task =>
-    task.location.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredTasks = tasks
+    .filter(task => task.location.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
+  const paginated = filteredTasks.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
   const pageCount = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE)
-  const paginatedTasks = filteredTasks.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  )
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
+    <div className="p-4 max-w-4xl mx-auto">
       <h1 className="text-3xl font-semibold mb-6 text-gray-800">Waste Collection Tasks</h1>
-      
+
       <div className="mb-4 flex items-center">
         <Input
           type="text"
@@ -225,7 +171,7 @@ export default function CollectPage() {
       ) : (
         <>
           <div className="space-y-4">
-            {paginatedTasks.map(task => (
+            {paginated.map(task => (
               <div key={task.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex justify-between items-center mb-2">
                   <h2 className="text-lg font-medium text-gray-800 flex items-center">
@@ -237,7 +183,7 @@ export default function CollectPage() {
                 <div className="grid grid-cols-3 gap-2 text-sm text-gray-600 mb-3">
                   <div className="flex items-center relative">
                     <Trash2 className="w-4 h-4 mr-2 text-gray-500" />
-                    <span 
+                    <span
                       onMouseEnter={() => setHoveredWasteType(task.wasteType)}
                       onMouseLeave={() => setHoveredWasteType(null)}
                       className="cursor-pointer"
@@ -261,20 +207,20 @@ export default function CollectPage() {
                 </div>
                 <div className="flex justify-end">
                   {task.status === 'pending' && (
-                    <Button onClick={() => handleStatusChange(task.id, 'in_progress')} variant="outline" size="sm">
+                    <Button onClick={() => handleStatusChange(task.id, 'in_progress')} size="sm">
                       Start Collection
                     </Button>
                   )}
-                  {task.status === 'in_progress' && task.collectorId === user?.id && (
-                    <Button onClick={() => setSelectedTask(task)} variant="outline" size="sm">
+                  {task.status === 'in_progress' && task.collectorId === userEmail && (
+                    <Button onClick={() => setSelectedTask(task)} size="sm">
                       Complete & Verify
                     </Button>
                   )}
-                  {task.status === 'in_progress' && task.collectorId !== user?.id && (
-                    <span className="text-yellow-600 text-sm font-medium">In progress by another collector</span>
+                  {task.status === 'in_progress' && task.collectorId !== userEmail && (
+                    <span className="text-yellow-600 text-sm font-medium">In progress by another user</span>
                   )}
                   {task.status === 'verified' && (
-                    <span className="text-green-600 text-sm font-medium">Reward Earned</span>
+                    <span className="text-green-600 text-sm font-medium">Verified</span>
                   )}
                 </div>
               </div>
@@ -283,17 +229,15 @@ export default function CollectPage() {
 
           <div className="mt-4 flex justify-center">
             <Button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
               disabled={currentPage === 1}
               className="mr-2"
             >
               Previous
             </Button>
-            <span className="mx-2 self-center">
-              Page {currentPage} of {pageCount}
-            </span>
+            <span className="self-center">Page {currentPage} of {pageCount}</span>
             <Button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, pageCount))}
+              onClick={() => setCurrentPage(p => Math.min(p + 1, pageCount))}
               disabled={currentPage === pageCount}
               className="ml-2"
             >
@@ -307,65 +251,22 @@ export default function CollectPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-semibold mb-4">Verify Collection</h3>
-            <p className="mb-4 text-sm text-gray-600">Upload a photo of the collected waste to verify and earn your reward.</p>
+            <p className="mb-4 text-sm text-gray-600">Upload an image to complete verification.</p>
+
             <div className="mb-4">
-              <label htmlFor="verification-image" className="block text-sm font-medium text-gray-700 mb-2">
-                Upload Image
-              </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                <div className="space-y-1 text-center">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="flex text-sm text-gray-600">
-                    <label
-                      htmlFor="verification-image"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                    >
-                      <span>Upload a file</span>
-                      <input id="verification-image" name="verification-image" type="file" className="sr-only" onChange={handleImageUpload} accept="image/*" />
-                    </label>
-                  </div>
-                  <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                </div>
-              </div>
+              <input type="file" accept="image/*" onChange={handleImageUpload} />
+              {verificationImage && <img src={verificationImage} className="mt-4 rounded w-full" />}
             </div>
-            {verificationImage && (
-              <img src={verificationImage} alt="Verification" className="mb-4 rounded-md w-full" />
-            )}
-            <Button
-              onClick={handleVerify}
-              className="w-full"
-              disabled={!verificationImage || verificationStatus === 'verifying'}
-            >
-              {verificationStatus === 'verifying' ? (
-                <>
-                  <Loader className="animate-spin -ml-1 mr-3 h-5 w-5" />
-                  Verifying...
-                </>
-              ) : 'Verify Collection'}
+
+            <Button onClick={handleVerify} disabled={!verificationImage} className="w-full">
+              Verify Collection
             </Button>
-            {verificationStatus === 'success' && verificationResult && (
-              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
-                <p>Waste Type Match: {verificationResult.wasteTypeMatch ? 'Yes' : 'No'}</p>
-                <p>Quantity Match: {verificationResult.quantityMatch ? 'Yes' : 'No'}</p>
-                <p>Confidence: {(verificationResult.confidence * 100).toFixed(2)}%</p>
-              </div>
-            )}
-            {verificationStatus === 'failure' && (
-              <p className="mt-2 text-red-600 text-center text-sm">Verification failed. Please try again.</p>
-            )}
             <Button onClick={() => setSelectedTask(null)} variant="outline" className="w-full mt-2">
-              Close
+              Cancel
             </Button>
           </div>
         </div>
       )}
-
-      {/* Add a conditional render to show user info or login prompt */}
-      {/* {user ? (
-        <p className="text-sm text-gray-600 mb-4">Logged in as: {user.name}</p>
-      ) : (
-        <p className="text-sm text-red-600 mb-4">Please log in to collect waste and earn rewards.</p>
-      )} */}
     </div>
   )
 }
@@ -374,8 +275,7 @@ function StatusBadge({ status }: { status: CollectionTask['status'] }) {
   const statusConfig = {
     pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
     in_progress: { color: 'bg-blue-100 text-blue-800', icon: Trash2 },
-    completed: { color: 'bg-green-100 text-green-800', icon: CheckCircle },
-    verified: { color: 'bg-purple-100 text-purple-800', icon: CheckCircle },
+    verified: { color: 'bg-green-100 text-green-800', icon: CheckCircle },
   }
 
   const { color, icon: Icon } = statusConfig[status]

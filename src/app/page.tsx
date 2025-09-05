@@ -1,12 +1,11 @@
 // @ts-nocheck
 'use client'
 import { useState, useEffect } from 'react'
-import { ArrowRight, Leaf, Recycle, Users, Coins, MapPin, ChevronRight } from 'lucide-react'
+import { ArrowRight, Leaf, Recycle, Users, Coins, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Poppins } from 'next/font/google'
 import Link from 'next/link'
-import ContractInteraction from '@/components/ContractInteraction'
-import { getRecentReports, getAllRewards, getWasteCollectionTasks } from '@/utils/db/actions'
+
 const poppins = Poppins({ 
   weight: ['300', '400', '600'],
   subsets: ['latin'],
@@ -33,45 +32,23 @@ export default function Home() {
     tokensEarned: 0,
     co2Offset: 0
   });
-
-  
+  const [recentReports, setRecentReports] = useState([]);
 
   useEffect(() => {
-    async function fetchImpactData() {
-      try {
-        const reports = await getRecentReports(100);  // Fetch last 100 reports
-        const rewards = await getAllRewards();
-        const tasks = await getWasteCollectionTasks(100);  // Fetch last 100 tasks
+    const reports = JSON.parse(localStorage.getItem('reports') || '[]');
+    const rewards = JSON.parse(localStorage.getItem('rewards') || '[]');
 
-        const wasteCollected = tasks.reduce((total, task) => {
-          const match = task.amount.match(/(\d+(\.\d+)?)/);
-          const amount = match ? parseFloat(match[0]) : 0;
-          return total + amount;
-        }, 0);
+    setRecentReports(reports.reverse().slice(0, 3)); // show latest 3
 
-        const reportsSubmitted = reports.length;
-        const tokensEarned = rewards.reduce((total, reward) => total + (reward.points || 0), 0);
-        const co2Offset = wasteCollected * 0.5;  // Assuming 0.5 kg CO2 offset per kg of waste
+    const totalWaste = reports.reduce((sum, r) => sum + (r.estimatedKg || 0), 0);
+    const totalTokens = rewards.reduce((sum, r) => sum + (r.points || 0), 0);
 
-        setImpactData({
-          wasteCollected: Math.round(wasteCollected * 10) / 10, // Round to 1 decimal place
-          reportsSubmitted,
-          tokensEarned,
-          co2Offset: Math.round(co2Offset * 10) / 10 // Round to 1 decimal place
-        });
-      } catch (error) {
-        console.error("Error fetching impact data:", error);
-        // Set default values in case of error
-        setImpactData({
-          wasteCollected: 0,
-          reportsSubmitted: 0,
-          tokensEarned: 0,
-          co2Offset: 0
-        });
-      }
-    }
-
-    fetchImpactData();
+    setImpactData({
+      wasteCollected: totalWaste,
+      reportsSubmitted: reports.length,
+      tokensEarned: totalTokens,
+      co2Offset: totalWaste * 0.5
+    });
   }, []);
 
   const login = () => {
@@ -88,21 +65,14 @@ export default function Home() {
         <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed mb-8">
           Join our community in making waste management more efficient and rewarding!
         </p>
-        {!loggedIn ? (
-          <Button onClick={login} className="bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full font-medium transition-all duration-300 ease-in-out transform hover:scale-105">
-            Get Started
+        <Link href="/report">
+          <Button className="bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full font-medium transition-all duration-300 ease-in-out transform hover:scale-105">
+            {loggedIn ? "Report Waste" : "Get Started"}
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
-        ) : (
-          <Link href="/report">
-            <Button className="bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full font-medium transition-all duration-300 ease-in-out transform hover:scale-105">
-              Report Waste
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-        )}
+        </Link>
       </section>
-      
+
       <section className="grid md:grid-cols-3 gap-10 mb-20">
         <FeatureCard
           icon={Leaf}
@@ -120,7 +90,7 @@ export default function Home() {
           description="Be part of a growing community committed to sustainable practices."
         />
       </section>
-      
+
       <section className="bg-white p-10 rounded-3xl shadow-lg mb-20">
         <h2 className="text-4xl font-bold mb-12 text-center text-gray-800">Our Impact</h2>
         <div className="grid md:grid-cols-4 gap-6">
@@ -131,9 +101,24 @@ export default function Home() {
         </div>
       </section>
 
-   
+      <section className="bg-gray-100 p-8 rounded-xl shadow-sm mt-10">
+        <h2 className="text-3xl font-bold mb-6 text-gray-800">Recent Reports</h2>
+        <div className="space-y-4">
+          {recentReports.length === 0 ? (
+            <p className="text-gray-500">No reports yet. Be the first to submit!</p>
+          ) : (
+            recentReports.map((report, idx) => (
+              <div key={idx} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <p><strong>Waste Type:</strong> {report.wasteType || "Unknown"}</p>
+                <p><strong>Estimated Weight:</strong> {report.estimatedKg || "?"} kg</p>
+                <p><strong>Location:</strong> {report.location || "Not provided"}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
     </div>
-  )
+  );
 }
 
 function ImpactCard({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) {

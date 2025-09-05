@@ -2,154 +2,119 @@
 import { useState, useEffect } from 'react'
 import { Coins, ArrowUpRight, ArrowDownRight, Gift, AlertCircle, Loader } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getUserByEmail, getRewardTransactions, getAvailableRewards, redeemReward, createTransaction } from '@/utils/db/actions'
 import { toast } from 'react-hot-toast'
 
-type Transaction = {
-  id: number
-  type: 'earned_report' | 'earned_collect' | 'redeemed'
-  amount: number
-  description: string
-  date: string
-}
-
-type Reward = {
-  id: number
-  name: string
-  cost: number
-  description: string | null
-  collectionInfo: string
-}
-
 export default function RewardsPage() {
-  const [user, setUser] = useState<{ id: number; email: string; name: string } | null>(null)
   const [balance, setBalance] = useState(0)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [rewards, setRewards] = useState<Reward[]>([])
+  const [transactions, setTransactions] = useState([])
+  const [rewards, setRewards] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchUserDataAndRewards = async () => {
-      setLoading(true)
-      try {
-        const userEmail = localStorage.getItem('userEmail')
-        if (userEmail) {
-          const fetchedUser = await getUserByEmail(userEmail)
-          if (fetchedUser) {
-            setUser(fetchedUser)
-            const fetchedTransactions = await getRewardTransactions(fetchedUser.id)
-            setTransactions(fetchedTransactions as Transaction[])
-            const fetchedRewards = await getAvailableRewards(fetchedUser.id)
-            setRewards(fetchedRewards.filter(r => r.cost > 0)) // Filter out rewards with 0 points
-            const calculatedBalance = fetchedTransactions.reduce((acc, transaction) => {
-              return transaction.type.startsWith('earned') ? acc + transaction.amount : acc - transaction.amount
-            }, 0)
-            setBalance(Math.max(calculatedBalance, 0)) // Ensure balance is never negative
-          } else {
-            toast.error('User not found. Please log in again.')
-          }
-        } else {
-          toast.error('User not logged in. Please log in.')
-        }
-      } catch (error) {
-        console.error('Error fetching user data and rewards:', error)
-        toast.error('Failed to load rewards data. Please try again.')
-      } finally {
-        setLoading(false)
-      }
+  const getUserEmail = () => localStorage.getItem('userEmail') || 'demo@example.com'
+
+  const addTransaction = (type, amount, description) => {
+    const email = getUserEmail()
+    const newTx = {
+      id: Date.now(),
+      email,
+      type,
+      amount,
+      description,
+      date: new Date().toLocaleString()
     }
 
-    fetchUserDataAndRewards()
+    const txList = JSON.parse(localStorage.getItem('transactions') || '[]')
+    txList.push(newTx)
+    localStorage.setItem('transactions', JSON.stringify(txList))
+
+    return newTx
+  }
+
+  const refreshData = () => {
+    const email = getUserEmail()
+    const txList = JSON.parse(localStorage.getItem('transactions') || '[]')
+    const userTx = txList.filter(tx => tx.email === email)
+    setTransactions(userTx)
+
+    const newBalance = userTx.reduce((acc, tx) => {
+      return tx.type.startsWith('earned') ? acc + tx.amount : acc - tx.amount
+    }, 0)
+
+    setBalance(Math.max(newBalance, 0))
+  }
+
+  useEffect(() => {
+    const email = getUserEmail()
+
+    // Simulate 1 earned_report if user has no transactions (for demo)
+    const txList = JSON.parse(localStorage.getItem('transactions') || '[]')
+    const userTx = txList.filter(tx => tx.email === email)
+
+    if (userTx.length === 0) {
+      const demoTx = {
+        id: Date.now(),
+        email,
+        type: 'earned_report',
+        amount: 10,
+        description: 'Report submitted: Plastic',
+        date: new Date().toLocaleString()
+      }
+      txList.push(demoTx)
+      localStorage.setItem('transactions', JSON.stringify(txList))
+    }
+
+    setTransactions(userTx)
+    const calculatedBalance = userTx.reduce((acc, tx) =>
+      tx.type.startsWith('earned') ? acc + tx.amount : acc - tx.amount
+    , 0)
+
+    setBalance(Math.max(calculatedBalance, 0))
+
+    // Dummy rewards list
+    setRewards([
+      { id: 1, name: "Eco Bottle", cost: 30, description: "Reusable eco bottle", collectionInfo: "Collect from booth A" },
+      { id: 2, name: "Organic Bag", cost: 50, description: "Stylish cloth bag", collectionInfo: "Collect from booth B" },
+      { id: 0, name: "Redeem All", cost: 0, description: null, collectionInfo: "Get all points converted" },
+    ])
+
+    setLoading(false)
   }, [])
 
-  const handleRedeemReward = async (rewardId: number) => {
-    if (!user) {
-      toast.error('Please log in to redeem rewards.')
+  const handleRedeemReward = (rewardId) => {
+    const reward = rewards.find(r => r.id === rewardId)
+    if (!reward || reward.cost > balance) {
+      toast.error('Insufficient balance or invalid reward.')
       return
     }
 
-    const reward = rewards.find(r => r.id === rewardId)
-    if (reward && balance >= reward.cost && reward.cost > 0) {
-      try {
-        if (balance < reward.cost) {
-          toast.error('Insufficient balance to redeem this reward')
-          return
-        }
-
-        // Update database
-        await redeemReward(user.id, rewardId);
-        
-        // Create a new transaction record
-        await createTransaction(user.id, 'redeemed', reward.cost, `Redeemed ${reward.name}`);
-
-        // Refresh user data and rewards after redemption
-        await refreshUserData();
-
-        toast.success(`You have successfully redeemed: ${reward.name}`)
-      } catch (error) {
-        console.error('Error redeeming reward:', error)
-        toast.error('Failed to redeem reward. Please try again.')
-      }
-    } else {
-      toast.error('Insufficient balance or invalid reward cost')
-    }
+    addTransaction('redeemed', reward.cost, `Redeemed ${reward.name}`)
+    toast.success(`You have successfully redeemed: ${reward.name}`)
+    refreshData()
   }
 
-  const handleRedeemAllPoints = async () => {
-    if (!user) {
-      toast.error('Please log in to redeem points.');
-      return;
+  const handleRedeemAllPoints = () => {
+    if (balance === 0) {
+      toast.error('No points to redeem.')
+      return
     }
 
-    if (balance > 0) {
-      try {
-        // Update database
-        await redeemReward(user.id, 0);
-        
-        // Create a new transaction record
-        await createTransaction(user.id, 'redeemed', balance, 'Redeemed all points');
-
-        // Refresh user data and rewards after redemption
-        await refreshUserData();
-
-        toast.success(`You have successfully redeemed all your points!`);
-      } catch (error) {
-        console.error('Error redeeming all points:', error);
-        toast.error('Failed to redeem all points. Please try again.');
-      }
-    } else {
-      toast.error('No points available to redeem')
-    }
-  }
-
-  const refreshUserData = async () => {
-    if (user) {
-      const fetchedUser = await getUserByEmail(user.email);
-      if (fetchedUser) {
-        const fetchedTransactions = await getRewardTransactions(fetchedUser.id);
-        setTransactions(fetchedTransactions as Transaction[]);
-        const fetchedRewards = await getAvailableRewards(fetchedUser.id);
-        setRewards(fetchedRewards.filter(r => r.cost > 0)); // Filter out rewards with 0 points
-        
-        // Recalculate balance
-        const calculatedBalance = fetchedTransactions.reduce((acc, transaction) => {
-          return transaction.type.startsWith('earned') ? acc + transaction.amount : acc - transaction.amount
-        }, 0)
-        setBalance(Math.max(calculatedBalance, 0)) // Ensure balance is never negative
-      }
-    }
+    addTransaction('redeemed', balance, 'Redeemed all points')
+    toast.success('You redeemed all your points!')
+    refreshData()
   }
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64">
-      <Loader className="animate-spin h-8 w-8 text-gray-600" />
-    </div>
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader className="animate-spin h-8 w-8 text-gray-600" />
+      </div>
+    )
   }
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <h1 className="text-3xl font-semibold mb-6 text-gray-800">Rewards</h1>
-      
+
       <div className="bg-white p-6 rounded-xl shadow-lg flex flex-col justify-between h-full border-l-4 border-green-500 mb-8">
         <h2 className="text-xl font-semibold mb-4 text-gray-800">Reward Balance</h2>
         <div className="flex items-center justify-between mt-auto">
@@ -164,27 +129,26 @@ export default function RewardsPage() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-8">
+        {/* Recent Transactions */}
         <div>
           <h2 className="text-2xl font-semibold mb-4 text-gray-800">Recent Transactions</h2>
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             {transactions.length > 0 ? (
-              transactions.map(transaction => (
-                <div key={transaction.id} className="flex items-center justify-between p-4 border-b border-gray-200 last:border-b-0">
+              transactions.map(tx => (
+                <div key={tx.id} className="flex items-center justify-between p-4 border-b border-gray-200 last:border-b-0">
                   <div className="flex items-center">
-                    {transaction.type === 'earned_report' ? (
+                    {tx.type.startsWith('earned') ? (
                       <ArrowUpRight className="w-5 h-5 text-green-500 mr-3" />
-                    ) : transaction.type === 'earned_collect' ? (
-                      <ArrowUpRight className="w-5 h-5 text-blue-500 mr-3" />
                     ) : (
                       <ArrowDownRight className="w-5 h-5 text-red-500 mr-3" />
                     )}
                     <div>
-                      <p className="font-medium text-gray-800">{transaction.description}</p>
-                      <p className="text-sm text-gray-500">{transaction.date}</p>
+                      <p className="font-medium text-gray-800">{tx.description}</p>
+                      <p className="text-sm text-gray-500">{tx.date}</p>
                     </div>
                   </div>
-                  <span className={`font-semibold ${transaction.type.startsWith('earned') ? 'text-green-500' : 'text-red-500'}`}>
-                    {transaction.type.startsWith('earned') ? '+' : '-'}{transaction.amount}
+                  <span className={`font-semibold ${tx.type.startsWith('earned') ? 'text-green-500' : 'text-red-500'}`}>
+                    {tx.type.startsWith('earned') ? '+' : '-'}{tx.amount}
                   </span>
                 </div>
               ))
@@ -194,6 +158,7 @@ export default function RewardsPage() {
           </div>
         </div>
 
+        {/* Available Rewards */}
         <div>
           <h2 className="text-2xl font-semibold mb-4 text-gray-800">Available Rewards</h2>
           <div className="space-y-4">
@@ -207,24 +172,12 @@ export default function RewardsPage() {
                   <p className="text-gray-600 mb-2">{reward.description}</p>
                   <p className="text-sm text-gray-500 mb-4">{reward.collectionInfo}</p>
                   {reward.id === 0 ? (
-                    <div className="space-y-2">
-                      <Button 
-                        onClick={handleRedeemAllPoints}
-                        className="w-full bg-green-500 hover:bg-green-600 text-white"
-                        disabled={balance === 0}
-                      >
-                        <Gift className="w-4 h-4 mr-2" />
-                        Redeem All Points
-                      </Button>
-                    </div>
+                    <Button onClick={handleRedeemAllPoints} className="w-full bg-green-500 hover:bg-green-600 text-white" disabled={balance === 0}>
+                      <Gift className="w-4 h-4 mr-2" /> Redeem All Points
+                    </Button>
                   ) : (
-                    <Button 
-                      onClick={() => handleRedeemReward(reward.id)}
-                      className="w-full bg-green-500 hover:bg-green-600 text-white"
-                      disabled={balance < reward.cost}
-                    >
-                      <Gift className="w-4 h-4 mr-2" />
-                      Redeem Reward
+                    <Button onClick={() => handleRedeemReward(reward.id)} className="w-full bg-green-500 hover:bg-green-600 text-white" disabled={balance < reward.cost}>
+                      <Gift className="w-4 h-4 mr-2" /> Redeem Reward
                     </Button>
                   )}
                 </div>
