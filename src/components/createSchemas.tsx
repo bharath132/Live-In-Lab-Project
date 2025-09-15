@@ -1,4 +1,4 @@
-import { createSchemas } from '@/utils/signSchemas';
+import { createSchemas } from '../utils/signSchemas';
 import { useEffect } from 'react';
 // import { createSchemas } from '../utils/signSchemas';
 

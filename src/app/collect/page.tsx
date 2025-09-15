@@ -1,38 +1,53 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { Trash2, MapPin, CheckCircle, Clock, Upload, Loader, Calendar, Weight, Search } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { toast } from 'react-hot-toast'
+import { useState, useEffect } from "react";
+import {
+  Trash2,
+  MapPin,
+  CheckCircle,
+  Clock,
+  Upload,
+  Loader,
+  Calendar,
+  Weight,
+  Search,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "react-hot-toast";
 
 type CollectionTask = {
-  id: number
-  location: string
-  wasteType: string
-  amount: string
-  status: 'pending' | 'in_progress' | 'verified'
-  date: string
-  collectorId: string | null
-}
+  id: number;
+  location: string;
+  wasteType: string;
+  amount: string;
+  status: string;
+  date: string;
+  collectorId: string | null;
+};
 
-const ITEMS_PER_PAGE = 5
+const ITEMS_PER_PAGE = 5;
 
 export default function CollectPage() {
-  const [tasks, setTasks] = useState<CollectionTask[]>([])
-  const [loading, setLoading] = useState(true)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [hoveredWasteType, setHoveredWasteType] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [selectedTask, setSelectedTask] = useState<CollectionTask | null>(null)
-  const [verificationImage, setVerificationImage] = useState<string | null>(null)
+  const [tasks, setTasks] = useState<CollectionTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [hoveredWasteType, setHoveredWasteType] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedTask, setSelectedTask] = useState<CollectionTask | null>(null);
+  const [verificationImage, setVerificationImage] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
-    const storedEmail = localStorage.getItem('userEmail')
-    setUserEmail(storedEmail)
+    const storedEmail = localStorage.getItem("user");
+    setUserEmail(storedEmail);
 
-    const existing = localStorage.getItem('collectionTasks')
+    const existing = localStorage.getItem("collectionTasks");
+    const reported = localStorage.getItem("reports");
+
+    setTasks((prevTasks) => [...prevTasks, ...JSON.parse(reported as string)]);
 
     if (!existing) {
       const dummyTasks: CollectionTask[] = [
@@ -80,76 +95,91 @@ export default function CollectPage() {
           status: "verified",
           date: "2025-08-05",
           collectorId: storedEmail,
-        }
-      ]
+        },
+      ];
 
-      localStorage.setItem("collectionTasks", JSON.stringify(dummyTasks))
-      setTasks(dummyTasks)
+      localStorage.setItem("collectionTasks", JSON.stringify(dummyTasks));
+      setTasks((prevTasks) => [...prevTasks, ...dummyTasks]);
+      console.log("tasks", tasks);
     } else {
-      setTasks(JSON.parse(existing))
+      setTasks(JSON.parse(existing));
     }
 
-    setLoading(false)
-  }, [])
+    setLoading(false);
+  }, []);
 
   const saveTasks = (updated: CollectionTask[]) => {
-    setTasks(updated)
-    localStorage.setItem('collectionTasks', JSON.stringify(updated))
-  }
+    setTasks(updated);
+    localStorage.setItem("collectionTasks", JSON.stringify(updated));
+  };
 
-  const handleStatusChange = (taskId: number, newStatus: CollectionTask['status']) => {
+  const handleStatusChange = (
+    taskId: number,
+    newStatus: CollectionTask["status"]
+  ) => {
     if (!userEmail) {
-      toast.error('User not logged in')
-      return
+      toast.error("User not logged in");
+      return;
     }
 
-    const updated = tasks.map(task =>
-      task.id === taskId
-        ? { ...task, status: newStatus, collectorId: newStatus === 'in_progress' ? userEmail : task.collectorId }
-        : task
-    )
-    saveTasks(updated)
-    toast.success(`Task marked as ${newStatus}`)
-  }
+    const updated = tasks.map(
+      (task): CollectionTask =>
+        task.id === taskId
+          ? {
+              ...task,
+              status: newStatus,
+              collectorId:
+                newStatus === "in_progress" ? userEmail : task.collectorId,
+            }
+          : task
+    );
+    saveTasks(updated);
+    toast.success(`Task marked as ${newStatus}`);
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onloadend = () => {
-        setVerificationImage(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+        setVerificationImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
-  }
+  };
 
   const handleVerify = () => {
     if (!selectedTask || !userEmail || !verificationImage) {
-      toast.error('Missing information for verification.')
-      return
+      toast.error("Missing information for verification.");
+      return;
     }
 
-    const updated = tasks.map(task =>
-      task.id === selectedTask.id
-        ? { ...task, status: 'verified' }
-        : task
-    )
-    saveTasks(updated)
-    toast.success('Waste verified successfully! Reward added.')
-    setSelectedTask(null)
-    setVerificationImage(null)
-  }
+    const updated = tasks.map((task) =>
+      task.id === selectedTask.id ? { ...task, status: "verified" } : task
+    );
+    saveTasks(updated);
+    toast.success("Waste verified successfully! Reward added.");
+    setSelectedTask(null);
+    setVerificationImage(null);
+  };
 
   const filteredTasks = tasks
-    .filter(task => task.location.toLowerCase().includes(searchTerm.toLowerCase()))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .filter((task) =>
+      task.location.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const paginated = filteredTasks.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-  const pageCount = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE)
+  const paginated = filteredTasks.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+  const pageCount = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE);
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-semibold mb-6 text-gray-800">Waste Collection Tasks</h1>
+      <h1 className="text-3xl font-semibold mb-6 text-gray-800">
+        Waste Collection Tasks
+      </h1>
 
       <div className="mb-4 flex items-center">
         <Input
@@ -171,8 +201,11 @@ export default function CollectPage() {
       ) : (
         <>
           <div className="space-y-4">
-            {paginated.map(task => (
-              <div key={task.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+            {paginated.map((task) => (
+              <div
+                key={task.id}
+                className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"
+              >
                 <div className="flex justify-between items-center mb-2">
                   <h2 className="text-lg font-medium text-gray-800 flex items-center">
                     <MapPin className="w-5 h-5 mr-2 text-gray-500" />
@@ -188,7 +221,9 @@ export default function CollectPage() {
                       onMouseLeave={() => setHoveredWasteType(null)}
                       className="cursor-pointer"
                     >
-                      {task.wasteType.length > 8 ? `${task.wasteType.slice(0, 8)}...` : task.wasteType}
+                      {task.wasteType.length > 8
+                        ? `${task.wasteType.slice(0, 8)}...`
+                        : task.wasteType}
                     </span>
                     {hoveredWasteType === task.wasteType && (
                       <div className="absolute left-0 top-full mt-1 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-10">
@@ -206,21 +241,30 @@ export default function CollectPage() {
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  {task.status === 'pending' && (
-                    <Button onClick={() => handleStatusChange(task.id, 'in_progress')} size="sm">
+                  {task.status === "pending" && (
+                    <Button
+                      onClick={() => handleStatusChange(task.id, "in_progress")}
+                      size="sm"
+                    >
                       Start Collection
                     </Button>
                   )}
-                  {task.status === 'in_progress' && task.collectorId === userEmail && (
-                    <Button onClick={() => setSelectedTask(task)} size="sm">
-                      Complete & Verify
-                    </Button>
-                  )}
-                  {task.status === 'in_progress' && task.collectorId !== userEmail && (
-                    <span className="text-yellow-600 text-sm font-medium">In progress by another user</span>
-                  )}
-                  {task.status === 'verified' && (
-                    <span className="text-green-600 text-sm font-medium">Verified</span>
+                  {task.status === "in_progress" &&
+                    task.collectorId === userEmail && (
+                      <Button onClick={() => setSelectedTask(task)} size="sm">
+                        Complete & Verify
+                      </Button>
+                    )}
+                  {task.status === "in_progress" &&
+                    task.collectorId !== userEmail && (
+                      <span className="text-yellow-600 text-sm font-medium">
+                        In progress by another user
+                      </span>
+                    )}
+                  {task.status === "verified" && (
+                    <span className="text-green-600 text-sm font-medium">
+                      Verified
+                    </span>
                   )}
                 </div>
               </div>
@@ -229,15 +273,17 @@ export default function CollectPage() {
 
           <div className="mt-4 flex justify-center">
             <Button
-              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
               disabled={currentPage === 1}
               className="mr-2"
             >
               Previous
             </Button>
-            <span className="self-center">Page {currentPage} of {pageCount}</span>
+            <span className="self-center">
+              Page {currentPage} of {pageCount}
+            </span>
             <Button
-              onClick={() => setCurrentPage(p => Math.min(p + 1, pageCount))}
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, pageCount))}
               disabled={currentPage === pageCount}
               className="ml-2"
             >
@@ -251,39 +297,57 @@ export default function CollectPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-semibold mb-4">Verify Collection</h3>
-            <p className="mb-4 text-sm text-gray-600">Upload an image to complete verification.</p>
+            <p className="mb-4 text-sm text-gray-600">
+              Upload an image to complete verification.
+            </p>
 
             <div className="mb-4">
-              <input type="file" accept="image/*" onChange={handleImageUpload} />
-              {verificationImage && <img src={verificationImage} className="mt-4 rounded w-full" />}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+              />
+              {verificationImage && (
+                <img src={verificationImage} className="mt-4 rounded w-full" />
+              )}
             </div>
 
-            <Button onClick={handleVerify} disabled={!verificationImage} className="w-full">
+            <Button
+              onClick={handleVerify}
+              disabled={!verificationImage}
+              className="w-full"
+            >
               Verify Collection
             </Button>
-            <Button onClick={() => setSelectedTask(null)} variant="outline" className="w-full mt-2">
+            <Button
+              onClick={() => setSelectedTask(null)}
+              variant="outline"
+              className="w-full mt-2"
+            >
               Cancel
             </Button>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }
 
-function StatusBadge({ status }: { status: CollectionTask['status'] }) {
+function StatusBadge({ status }: { status: string }) {
   const statusConfig = {
-    pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
-    in_progress: { color: 'bg-blue-100 text-blue-800', icon: Trash2 },
-    verified: { color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  }
+    pending: { color: "bg-yellow-100 text-yellow-800", icon: Clock },
+    in_progress: { color: "bg-blue-100 text-blue-800", icon: Trash2 },
+    verified: { color: "bg-green-100 text-green-800", icon: CheckCircle },
+  };
 
-  const { color, icon: Icon } = statusConfig[status]
+  const { color, icon: Icon } = statusConfig["pending"];
 
   return (
-    <span className={`px-2 py-1 rounded-full text-xs font-medium ${color} flex items-center`}>
+    <span
+      className={`px-2 py-1 rounded-full text-xs font-medium ${color} flex items-center`}
+    >
       <Icon className="mr-1 h-3 w-3" />
-      {status.replace('_', ' ')}
+      {status.replace("_", " ")}
     </span>
-  )
+  );
 }

@@ -1,94 +1,63 @@
 // @ts-nocheck
-'use client'
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { usePathname } from 'next/navigation'
-import { Button } from "@/components/ui/button"
-import { Menu, Coins, Leaf, Search, Bell, User, ChevronDown, LogIn, LogOut } from "lucide-react"
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
-import { Web3Auth } from "@web3auth/modal"
-import { CHAIN_NAMESPACES, IProvider, WEB3AUTH_NETWORK } from "@web3auth/base"
-import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider"
-import { useMediaQuery } from "@/hooks/useMediaQuery"
-import { createUser, getUnreadNotifications, markNotificationAsRead, getUserByEmail, getUserBalance } from "@/utils/db/actions"
+"use client";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Menu,
+  Coins,
+  Leaf,
+  Search,
+  Bell,
+  User,
+  ChevronDown,
+  LogIn,
+  LogOut,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+// Removed Web3Auth imports
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import {
+  createUser,
+  getUnreadNotifications,
+  markNotificationAsRead,
+  getUserByEmail,
+  getUserBalance,
+} from "@/utils/db/actions";
 
-const clientId = "BJKdDFkNtkWX87XqkuWrDu4rbkSvWyQZ5lswS0ucINxxcN0inRVW8zzKAywPPzgiOHP7_3PcfFwfpvcQvSdaLRs";
-
-const chainConfig = {
-  chainNamespace: CHAIN_NAMESPACES.EIP155,
-  chainId: "0xaa36a7",
-  rpcTarget: "https://rpc.ankr.com/eth_sepolia",
-  displayName: "Ethereum Sepolia Testnet",
-  blockExplorerUrl: "https://sepolia.etherscan.io",
-  ticker: "ETH",
-  tickerName: "Ethereum",
-  logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
-};
-
-const privateKeyProvider = new EthereumPrivateKeyProvider({
-  config: { chainConfig },
-});
-
-const web3auth = new Web3Auth({
-  clientId,
-  web3AuthNetwork: WEB3AUTH_NETWORK.TESTNET, // Changed from SAPPHIRE_MAINNET to TESTNET
-  privateKeyProvider,
-});
+// Removed Web3Auth config
 
 interface HeaderProps {
   onMenuClick: () => void;
   totalEarnings: number;
 }
 
-export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
-  const [provider, setProvider] = useState<IProvider | null>(null);
+const Header: React.FC<HeaderProps> = ({ onMenuClick, totalEarnings }) => {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [userInfo, setUserInfo] = useState<any>(null);
-  const pathname = usePathname()
+  const pathname = usePathname();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const isMobile = useMediaQuery("(max-width: 768px)")
-  const [balance, setBalance] = useState(0)
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  const [balance, setBalance] = useState(0);
 
-  console.log('user info', userInfo);
-  
-  useEffect(() => {
-    const init = async () => {
-      try {
-        await web3auth.initModal();
-        setProvider(web3auth.provider);
+  console.log("user info", userInfo);
 
-        if (web3auth.connected) {
-          setLoggedIn(true);
-          const user = await web3auth.getUserInfo();
-          setUserInfo(user);
-          if (user.email) {
-            localStorage.setItem('userEmail', user.email);
-            try {
-              await createUser(user.email, user.name || 'Anonymous User');
-            } catch (error) {
-              console.error("Error creating user:", error);
-              // Handle the error appropriately, maybe show a message to the user
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error initializing Web3Auth:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    init();
-  }, []);
+  // Removed Web3Auth initialization
 
   useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setUserInfo(JSON.parse(storedUser));
+      setLoggedIn(true);
+    }
     const fetchNotifications = async () => {
       if (userInfo && userInfo.email) {
         const user = await getUserByEmail(userInfo.email);
@@ -105,7 +74,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
     const notificationInterval = setInterval(fetchNotifications, 30000); // Check every 30 seconds
 
     return () => clearInterval(notificationInterval);
-  }, [userInfo]);
+  }, []);
 
   useEffect(() => {
     const fetchUserBalance = async () => {
@@ -125,93 +94,53 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
       setBalance(event.detail);
     };
 
-    window.addEventListener('balanceUpdated', handleBalanceUpdate as EventListener);
+    window.addEventListener(
+      "balanceUpdated",
+      handleBalanceUpdate as EventListener
+    );
 
     return () => {
-      window.removeEventListener('balanceUpdated', handleBalanceUpdate as EventListener);
+      window.removeEventListener(
+        "balanceUpdated",
+        handleBalanceUpdate as EventListener
+      );
     };
   }, [userInfo]);
 
-  const login = async () => {
-    if (!web3auth) {
-      console.log("web3auth not initialized yet");
-      return;
-    }
-    try {
-      const web3authProvider = await web3auth.connect();
-      setProvider(web3authProvider);
-      setLoggedIn(true);
-      const user = await web3auth.getUserInfo();
-      setUserInfo(user);
-      if (user.email) {
-        localStorage.setItem('userEmail', user.email);
-        try {
-          await createUser(user.email, user.name || 'Anonymous User');
-        } catch (error) {
-          console.error("Error creating user:", error);
-          // Handle the error appropriately, maybe show a message to the user
-        }
-      }
-    } catch (error) {
-      console.error("Error during login:", error);
-    }
-  };
-
-  const logout = async () => {
-    if (!web3auth) {
-      console.log("web3auth not initialized yet");
-      return;
-    }
-    try {
-      await web3auth.logout();
-      setProvider(null);
-      setLoggedIn(false);
-      setUserInfo(null);
-      localStorage.removeItem('userEmail');
-    } catch (error) {
-      console.error("Error during logout:", error);
-    }
-  };
-
-  const getUserInfo = async () => {
-    if (web3auth.connected) {
-      const user = await web3auth.getUserInfo();
-      setUserInfo(user);
-      if (user.email) {
-        localStorage.setItem('userEmail', user.email);
-        try {
-          await createUser(user.email, user.name || 'Anonymous User');
-        } catch (error) {
-          console.error("Error creating user:", error);
-          // Handle the error appropriately, maybe show a message to the user
-        }
-      }
-    }
-  };
+  // Removed login, logout, and getUserInfo functions
 
   const handleNotificationClick = async (notificationId: number) => {
     await markNotificationAsRead(notificationId);
-    setNotifications(prevNotifications => 
-      prevNotifications.filter(notification => notification.id !== notificationId)
+    setNotifications((prevNotifications) =>
+      prevNotifications.filter(
+        (notification) => notification.id !== notificationId
+      )
     );
   };
 
-  if (loading) {
-    return <div>Loading Web3Auth...</div>;
-  }
+  // Removed Web3Auth loading UI
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="flex items-center justify-between px-4 py-2">
         <div className="flex items-center">
-          <Button variant="ghost" size="icon" className="mr-2 md:mr-4" onClick={onMenuClick}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mr-2 md:mr-4"
+            onClick={onMenuClick}
+          >
             <Menu className="h-6 w-6" />
           </Button>
           <Link href="/" className="flex items-center">
             <Leaf className="h-6 w-6 md:h-8 md:w-8 text-green-500 mr-1 md:mr-2" />
             <div className="flex flex-col">
-              <span className="font-bold text-base md:text-lg text-gray-800">Zero2Hero</span>
-              <span className="text-[8px] md:text-[10px] text-gray-500 -mt-1">ETHOnline24</span>
+              <span className="font-bold text-base md:text-lg text-gray-800">
+                Zero2Hero
+              </span>
+              <span className="text-[8px] md:text-[10px] text-gray-500 -mt-1">
+                ETHOnline24
+              </span>
             </div>
           </Link>
         </div>
@@ -247,13 +176,15 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
             <DropdownMenuContent align="end" className="w-64">
               {notifications.length > 0 ? (
                 notifications.map((notification) => (
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     key={notification.id}
                     onClick={() => handleNotificationClick(notification.id)}
                   >
                     <div className="flex flex-col">
                       <span className="font-medium">{notification.type}</span>
-                      <span className="text-sm text-gray-500">{notification.message}</span>
+                      <span className="text-sm text-gray-500">
+                        {notification.message}
+                      </span>
                     </div>
                   </DropdownMenuItem>
                 ))
@@ -268,33 +199,83 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
               {balance.toFixed(2)}
             </span>
           </div>
-          {!loggedIn ? (
-            <Button onClick={login} className="bg-green-600 hover:bg-green-700 text-white text-sm md:text-base">
-              Login
-              <LogIn className="ml-1 md:ml-2 h-4 w-4 md:h-5 md:w-5" />
-            </Button>
+          {/* MongoDB Login Form */}
+          {userInfo ? (
+            <div className="flex  items-center gap-2">
+              <h1 className="font-bold text-lg text-center">
+                {userInfo.email.split("@")[0]}
+              </h1>
+              <Button
+                type="submit"
+                className="bg-green-600 hover:bg-green-700 text-white text-sm md:text-base"
+                disabled={loading}
+                onClick={() => {
+                  setLoggedIn(false);
+                  setUserInfo(null);
+                  localStorage.removeItem("user");
+                  alert("Logged out");
+                }}
+              >
+                Logout
+              </Button>
+            </div>
           ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="flex items-center">
-                  <User className="h-5 w-5 mr-1" />
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={getUserInfo}>
-                  {userInfo ? userInfo.name : "Fetch User Info"}
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/settings">Profile</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>Settings</DropdownMenuItem>
-                <DropdownMenuItem onClick={logout}>Sign Out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <form
+              className="flex items-center space-x-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                const form = e.target;
+                const email = form.email.value;
+                const password = form.password.value;
+                try {
+                  const res = await fetch("/api/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password }),
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setLoggedIn(true);
+                    setUserInfo(data.user);
+                    localStorage.setItem("user", JSON.stringify(data.user));
+                    alert("Login successful");
+                  } else {
+                    alert(data.error || "Login failed");
+                  }
+                } catch (err) {
+                  alert("Error logging in");
+                }
+                setLoading(false);
+              }}
+            >
+              <input
+                name="email"
+                type="email"
+                placeholder="Email"
+                className="px-2 py-1 border rounded"
+                required
+              />
+              <input
+                name="password"
+                type="password"
+                placeholder="Password"
+                className="px-2 py-1 border rounded"
+                required
+              />
+              <Button
+                type="submit"
+                className="bg-green-600 hover:bg-green-700 text-white text-sm md:text-base"
+                disabled={loading}
+              >
+                {loading ? "Logging in..." : "Login"}
+              </Button>
+            </form>
           )}
         </div>
       </div>
     </header>
-  )
-}
+  );
+};
+
+export default Header;
