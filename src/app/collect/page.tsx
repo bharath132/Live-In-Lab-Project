@@ -47,7 +47,7 @@ export default function CollectPage() {
     const existing = localStorage.getItem("collectionTasks");
     const reported = localStorage.getItem("reports");
 
-    setTasks((prevTasks) => [...prevTasks, ...JSON.parse(reported as string)]);
+    setTasks(reported ? (prevTasks) => [...prevTasks, ...JSON.parse(reported as string)] : []);
 
     if (!existing) {
       const dummyTasks: CollectionTask[] = [
